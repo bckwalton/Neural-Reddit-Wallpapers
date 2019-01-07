@@ -11,6 +11,8 @@ import imghdr
 import scipy
 import tensorflow
 import keras
+import ssl
+import random
 # from scipy.interpolate.interpnd import array
 
 try:
@@ -55,13 +57,65 @@ def resource_path(relative_path):
 
     return os.path.join(base_path, relative_path)
 
+def like():
+    fil = open(str(working_dir + 'record.txt'),'r')
+    name = None
+    path = None
+    lines = fil.readlines()
+    for line in lines:
+        if 'Name: ' in line:
+            name = line.split('Name: ')[1]
+            print('Liked:',name)
+        elif 'Path: ':
+            path = line.split('Path: ')[1]
+    fil.close()
+    if '\Like\\' in path:
+        toaster.show_toast("You already liked this","I guess you reeaallyy like it", icon_path=resource_path("icon.ico"), duration=5)
+    else:
+        os.rename(path,str('./' + working_dir + 'Like/'+(name[0:len(name)-1])))
+        like_dis_store(name[0:len(name)-1])
+        toaster.show_toast("Liked!","Awesome! I'll show you more pictures like this then :) ", icon_path=resource_path("icon.ico"), duration=5)
+
+def dislike():
+    fil = open(str(working_dir + 'record.txt'),'r')
+    name = None
+    path = None
+    lines = fil.readlines()
+    for line in lines:
+        if 'Name: ' in line:
+            name = line.split('Name: ')[1]
+            print('Disliked:',name)
+        elif 'Path: ':
+            path = line.split('Path: ')[1]
+    fil.close()
+    if '\Dislike\\' in path:
+        toaster.show_toast("You already disliked this","I'll get you something else...", icon_path=resource_path("icon.ico"), duration=2)
+    else:
+        os.rename(path,str('./' + working_dir + 'Dislike/'+(name[0:len(name)-1])))
+        like_dis_store(name[0:len(name)-1])
+        toaster.show_toast("Disliked","I'll get you something else, and not show you photos like this going foward", icon_path=resource_path("icon.ico"), duration=2)
+
+def like_dis_store(name):
+    path = find_files_path(working_dir,name)
+    fil = open(str(working_dir + 'record.txt'),'w')
+    print('Updating file')
+    line = 'Name: ' + name
+    line2 = 'Path: ' + path
+    fil.write(line)
+    fil.write('\n')
+    fil.write(line2)
+    fil.close()
+    print('Successful update')
+
 def setBackgroundFromSubreddit(subredditName, sort="top",timePeriod="week",requested=False):
     global resolution
     patience = 0
     if requested:
         toaster.show_toast("Changing Wallpaper","Requesting New Wallpaper please wait...", icon_path=resource_path("icon.ico"), duration=6)
+    past_numbers = []
     while patience < 3:
-        topImagePost = getTopImageFromSubreddit(subredditName,sort,timePeriod)
+        topImagePost, picked_number = getTopImageFromSubreddit(subredditName,sort,timePeriod,blocked_numbers=past_numbers)
+        past_numbers.append(picked_number)
         imageFilename, imageFilepath = storeImageInStoredBackgroundsFolder(topImagePost)
         if os.path.isfile(imageFilepath):
             resolution = res(imageFilepath)
@@ -72,7 +126,8 @@ def setBackgroundFromSubreddit(subredditName, sort="top",timePeriod="week",reque
             if result is not 'Like':
                 while result[0] is not 'Like':
                     print(str(imageFilename),':',result[0], ' Certainty:', result[1])
-                    topImagePost = getTopImageFromSubreddit(subredditName,sort,timePeriod)
+                    topImagePost, picked_number = getTopImageFromSubreddit(subredditName,sort,timePeriod,blocked_numbers=past_numbers)
+                    past_numbers.append(picked_number)
                     imageFilename, imageFilepath = storeImageInStoredBackgroundsFolder(topImagePost)
                     resolution = res(imageFilepath)
                     print('Resolution: [%d x %d]' % resolution)
@@ -84,38 +139,65 @@ def setBackgroundFromSubreddit(subredditName, sort="top",timePeriod="week",reque
             except Exception:
                 print("Failed to show toast, that would've been cool... ")
             setImageAsBackground(imageFilename, imageFilepath=imageFilepath)
+            try:
+                like_dis_store(imageFilename)
+            except Exception:
+                print('Failed to store record of current wallpaper')
+            # like_dis()
             print("Title: " + topImagePost["title"])
             return topImagePost, result[0]
 
+            
 
-def getTopImageFromSubreddit(subredditName,sort,timePeriod):
+
+def getTopImageFromSubreddit(subredditName,sort,timePeriod,blocked_numbers=[]):
     topImagePosts = getTopImagePostsFromSubreddit(subredditName,sort,timePeriod)
-    val = randint(0, 9)
-    print('Random value: ', val)
+    choices = list(set(list(range(len(topImagePosts)))) - set(blocked_numbers))
+    print("Total available choices:",len(choices))
+    val = random.choice(choices)
+    print('Random choice: ', val)
     while True:
         try:
             topPost = topImagePosts[int(val)]["data"]
             break
-        except Exception:
+        except Exception as e:
+            print(e)
             time.sleep(10)
-    return topPost
+    return topPost, val
 
 
-def getTopImagePostsFromSubreddit(subredditName,sort,timePeriod=None):
-    if timePeriod:
-        subredditPostsUrl = "https://www.reddit.com/r/" + subredditName + \
-            "/search.json?q=url:.jpg+OR+url:.png&sort="+str(sort)+"&restrict_sr=1&t=week"
-    else:
-        subredditPostsUrl = "https://www.reddit.com/r/" + subredditName + \
-            "/search.json?q=url:.jpg+OR+url:.png&sort="+str(sort)+"&restrict_sr=1"
+def getTopImagePostsFromSubreddit(subredditName,sort,timePeriod='week'):
+    ban_sleep = 0
+    user_agent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/35.0.1916.47 Safari/537.36'
     while True:
+        val = randint(0,1) #Yeah it seems that Reddit throttles hitting the main page of a subreddit but not search... odd.
+        # val = 1
+        print('Front page coin flip:',val)
+        if val == 1:
+            if timePeriod:
+                subredditPostsUrl = "https://www.reddit.com/r/" + subredditName + "/search.json?q=url:.jpg+OR+url:.png&sort="+str(sort)+"&restrict_sr=1&t="+str(timePeriod).lower()
+            else:
+                subredditPostsUrl = "https://www.reddit.com/r/" + subredditName + \
+                    "/search.json?q=url:.jpg+OR+url:.png&sort="+str(sort)+"&restrict_sr=1"
+        else:
+            print('Front it is')
+            if timePeriod:
+                subredditPostsUrl = "https://www.reddit.com/r/" + subredditName + ".json?sort="+str(sort)+"&restrict_sr=1&t="+str(timePeriod).lower()
+            else:
+                subredditPostsUrl = "https://www.reddit.com/r/" + subredditName + ".json?sort="+str(sort)+"&restrict_sr=1"
         try:
-            postsAsJsonRawText = urllib.request.urlopen(
-                subredditPostsUrl).read()
+            request = urllib.request.Request(subredditPostsUrl, headers={'User-Agent': user_agent})
+            postsAsJsonRawText = urllib.request.urlopen(request).read()
+            decodedJson = json.loads(postsAsJsonRawText.decode('utf-8'))
             break
-        except urllib.error.HTTPError as err:
-            time.sleep(5)
-    decodedJson = json.loads(postsAsJsonRawText.decode('utf-8'))
+        except (urllib.error.HTTPError, urllib.error.URLError, ssl.SSLEOFError, json.decoder.JSONDecodeError) as err:
+            if '429' in str(err):
+                ban_sleep += 120
+                print('We have been politely asked to stop DDOSing. Complying.', str( ban_sleep/60 ) ,'minute wait enacted (',err,')')
+                time.sleep(ban_sleep)
+            else:
+                print('Network issue detected, or invalid response. Sleeping 15 (',err,')')
+                time.sleep(15)
     posts = decodedJson["data"]["children"]
     return posts
 
@@ -135,6 +217,7 @@ def find_files_path(root, filename):
             if name == filename:
                 path = os.path.dirname(os.path.realpath( (path + "//" + name) )) + "\\" + filename
                 return path
+
 def storeImageInStoredBackgroundsFolder(image):
     createStoredBackgroundsFolderIfNotExists()
     imageTitle = str(image['title'].translate(string.punctuation).strip().replace(" ", "_")).replace(".",'-')

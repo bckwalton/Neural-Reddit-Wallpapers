@@ -9,7 +9,20 @@ import numpy as np
 from keras.preprocessing import image
 from keras.models import load_model
 from keras import backend as K
+# from keras.optimizers import Adam
 import os
+from win10toast import ToastNotifier
+import random
+toaster = ToastNotifier()
+def resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller """
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
+
 def train_conditional(working_dir='./stored_backgrounds'):
     import pickle
     # Part 2 - Fitting the CNN to the images
@@ -26,7 +39,6 @@ def train_conditional(working_dir='./stored_backgrounds'):
     print('Like size:',lik , 'Dislike size:',dis)
     # testSize = sum([len(files) for r, d, files in os.walk(test_dir)])
     
-
     skipTrain = False
     if lik <= 1 or dis <= 1:
         skipTrain = True
@@ -40,6 +52,7 @@ def train_conditional(working_dir='./stored_backgrounds'):
             if (trainSize is reccomender['trainSize']):
                 skipTrain = True
         if not skipTrain:
+            toaster.show_toast("Re-Evaluating Reccomendations","This shouldn't take long...", icon_path=resource_path("icon.ico"), duration=6)
             # Initialising the CNN
             classifier = Sequential()
             # Step 1 - Convolution
@@ -73,6 +86,18 @@ def train_conditional(working_dir='./stored_backgrounds'):
             out = open(str(train_dir + '/reccomender.wal'),'wb')
             pickle.dump(recommender, out)
             out.close()
+            descriptors = [
+                "This new model will work try so hard!",
+                "This new model is very self conscious...",
+                "This new model is very self confident.",
+                "This model loves you!",
+                "This fresh new model read a book of modern memes and will only pick the most pop-culture appropriate images",
+                "This model loves Rick and Morty. Do with that information what you will.",
+                "This model is an actual model, no kidding!",
+                "This model suffers from choice anxiety.",
+                "It's even more dedicated to getting you the right wallpaper."
+            ]
+            toaster.show_toast("New Reccomender Built",random.choice(descriptors), icon_path=resource_path("icon.ico"), duration=6)
         return classifier, training_set
     else:
         return None, None
@@ -97,7 +122,7 @@ def predict_LD(wal_address,classifier=None,training_set=None,working_dir='./stor
     else:
         prediction = 'Dislike'
     
-    print('Decision: ',prediction, ' | Certainty:', str(result[0][0]*100) + '%' )
+    print('Decision: ',prediction, ' | Certainty:', str(abs( ((result[0][0] - 0.5)*2)*100) ) + '%' )
     return([prediction, evaluations])
 
 def files(root):  

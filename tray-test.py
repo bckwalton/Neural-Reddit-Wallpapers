@@ -2,8 +2,10 @@ from infi.systray import SysTrayIcon
 import WallpaperHour
 from WallpaperHour import oneRun
 import threading
+from redditbackground import like, dislike
 from win10toast import ToastNotifier
 import os
+import time
 systray=None
 t2 = None
 def resource_path(relative_path):
@@ -23,7 +25,16 @@ try:
         t1.start()
     def on_quit_callback(systray):
         exit()
-    menu_options = (("Change Wallpaper", None, change),)
+    def like_it(systray):
+        t4 = threading.Thread(target=like)
+        t4.start()
+    def dislike_it(systray):
+        t5 = threading.Thread(target=dislike)
+        t5.start()
+        time.sleep(5)
+        t6 = threading.Thread(target=oneRun)
+        t6.start()
+    menu_options = (("Change Wallpaper", None, change), ("Like",None,like_it), ("Dislike",None,dislike_it),)
     systray = SysTrayIcon("icon.ico", "Wallpaper Hour", menu_options, on_quit=on_quit_callback)
     systray.start()
     WallpaperHour.main_loop()
