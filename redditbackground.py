@@ -167,7 +167,7 @@ def getTopImageFromSubreddit(subredditName,sort,timePeriod,blocked_numbers=[]):
 
 
 def getTopImagePostsFromSubreddit(subredditName,sort,timePeriod='week'):
-    ban_sleep = 0
+    ban_sleep = 1
     user_agent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/35.0.1916.47 Safari/537.36'
     while True:
         val = randint(0,1) #Yeah it seems that Reddit throttles hitting the main page of a subreddit but not search... odd.
@@ -192,7 +192,7 @@ def getTopImagePostsFromSubreddit(subredditName,sort,timePeriod='week'):
             break
         except (urllib.error.HTTPError, urllib.error.URLError, ssl.SSLEOFError, json.decoder.JSONDecodeError) as err:
             if '429' in str(err):
-                ban_sleep += 120
+                ban_sleep += ban_sleep
                 print('We have been politely asked to stop DDOSing. Complying.', str( ban_sleep/60 ) ,'minute wait enacted (',err,')')
                 time.sleep(ban_sleep)
             else:
